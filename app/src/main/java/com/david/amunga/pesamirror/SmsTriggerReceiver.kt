@@ -45,8 +45,16 @@ class SmsTriggerReceiver : BroadcastReceiver() {
         val parts = body.split("|").map { it.trim() }
         when {
             parts[0].equals("SM", ignoreCase = true) && parts.size >= 2 -> {
-                val amount = parts.getOrNull(1).orEmpty()
-                val phone = if (parts.size >= 3 && parts[1].isNotBlank()) parts[1] else sender
+                // SM|amount (phone = sender) or SM|phone|amount
+                val phone: String
+                val amount: String
+                if (parts.size >= 3) {
+                    phone = parts[1].trim()
+                    amount = parts[2].trim()
+                } else {
+                    phone = sender
+                    amount = parts.getOrNull(1).orEmpty().trim()
+                }
                 if (amount.isNotBlank() && phone.isNotBlank()) {
                     startUssdFromSms(context, prefs, MainActivity.MODE_SEND_MONEY, pin, amount,
                         phone = phone

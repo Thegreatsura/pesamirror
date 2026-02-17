@@ -105,7 +105,11 @@ class UssdAccessibilityService : AccessibilityService() {
 
         fun finishPin(): Boolean {
             val pin = prefs.getString(MainActivity.KEY_USSD_PIN, "") ?: ""
-            if (!setTextOnFocusedOrFirstEditable(root, pin) && !setTextOnNodeWithHint(root, pin, "pin", "mpesa")) return false
+            // Prefer the field that matches "Enter M-PESA PIN" (hint/description) so we don't
+            // type into the wrong editable or trigger CONFIRM "1" into the PIN box.
+            val pinSet = setTextOnNodeWithHint(root, pin, "pin", "mpesa", "enter") ||
+                setTextOnFocusedOrFirstEditable(root, pin)
+            if (!pinSet) return false
             clickSendOrOk(root)
             val confirmSend = prefs.getBoolean(MainActivity.KEY_CONFIRM_SEND, false)
             if (confirmSend) {
@@ -150,6 +154,11 @@ class UssdAccessibilityService : AccessibilityService() {
             WD_PIN -> finishPin()
 
             STATE_CONFIRM_1 -> {
+                // Don't type "1" (confirm) if PIN dialog is still visible—would insert "1" into PIN field.
+                if (rootContainsAnyText(root, listOf("Enter M-PESA PIN", "Enter M-Pesa PIN", "Enter PIN"))) {
+                    scheduleNext(STEP_DELAY_MS)
+                    return
+                }
                 if (typeInInputAndSend(root, "1")) {
                     handler.removeCallbacks(closeUssdAfterResultRunnable)
                     handler.postDelayed(closeUssdAfterResultRunnable, RESULT_THEN_CLOSE_DELAY_MS)
