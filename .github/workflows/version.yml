@@ -1,8 +1,12 @@
 name: Version
 
 on:
-  pull_request:
+  push:
     branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   version:
@@ -23,9 +27,10 @@ jobs:
       - name: Version (changesets + sync Android)
         uses: changesets/action@v1
         with:
-          version: "changeset version && node scripts/sync-android-version.cjs"
+          version: "bash scripts/version-and-sync.sh"
           commit: "Version Packages"
           title: "Version Packages"
           createGithubReleases: false
+          branch: main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
