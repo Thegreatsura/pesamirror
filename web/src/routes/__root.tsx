@@ -23,7 +23,7 @@ export const Route = createRootRoute({
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { title: 'PesaMirror' },
       { name: 'theme-color', content: '#fafafa', media: '(prefers-color-scheme: light)' },
-      { name: 'theme-color', content: '#0a0a0a', media: '(prefers-color-scheme: dark)' },
+      { name: 'theme-color', content: '#18181b', media: '(prefers-color-scheme: dark)' },
       { property: 'og:image', content: '/ogimage.png' },
     ],
     links: [
