@@ -107,6 +107,25 @@ print_post_install() {
   echo ""
 }
 
+# --- Check for google-services.json (required for Remote Push / Firebase) ---
+check_google_services() {
+  if [[ ! -f "$REPO_ROOT/app/google-services.json" ]]; then
+    echo ""
+    echo "⚠  Optional: app/google-services.json not found."
+    echo ""
+    echo "   Remote Push (FCM) will NOT be available without it."
+    echo "   To enable Remote Push:"
+    echo ""
+    echo "   1. Go to https://console.firebase.google.com and open (or create) your project."
+    echo "   2. Register an Android app with package name: com.david.amunga.pesamirror"
+    echo "   3. Download google-services.json and place it at: app/google-services.json"
+    echo "   4. Re-run this script, or rebuild manually: ./gradlew assembleDebug"
+    echo ""
+    echo "   See README → 'Remote Push setup' for the full walkthrough (service account, device token)."
+    echo ""
+  fi
+}
+
 # --- Check ADB (install if missing on macOS/Linux) ---
 if ! command -v adb &>/dev/null; then
   echo "ADB not found. Attempting to install..."
@@ -217,6 +236,9 @@ if [[ $device_count -gt 1 ]]; then
   export ANDROID_SERIAL="$device_serial"
 fi
 echo "Device detected: $device_serial"
+
+# --- Check google-services.json (Remote Push / Firebase) ---
+check_google_services
 
 # --- Build and install ---
 echo ""

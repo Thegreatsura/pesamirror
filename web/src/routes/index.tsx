@@ -2,9 +2,11 @@ import { createFileRoute } from '@tanstack/react-router'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AnimatePresence, motion } from 'motion/react'
 import { Controller, useForm } from 'react-hook-form'
+import { toast } from 'sonner'
 import { z } from 'zod'
 import type { TransactionMode } from '@/lib/sms'
 import { TRANSACTION_TYPES, buildSmsBody, openSmsApp } from '@/lib/sms'
+import { loadFCMConfig, triggerFCMEvent } from '@/lib/fcm'
 import { NumericKeypadDrawer } from '@/components/NumericKeypadDrawer'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -20,9 +22,12 @@ export const Route = createFileRoute('/')({ component: Home })
 
 const msg = 'Please fill all required fields.'
 
+type DeliveryMethod = 'sms' | 'push'
+
 const smsFormSchema = z
   .object({
     transactionType: z.string(),
+    deliveryMethod: z.enum(['sms', 'push']),
     receiver: z.string(),
     phone: z.string(),
     till: z.string(),
@@ -40,7 +45,7 @@ const smsFormSchema = z
         message: msg,
       })
     }
-    if (!data.receiver.trim()) {
+    if (data.deliveryMethod === 'sms' && !data.receiver.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['receiver'],
@@ -102,6 +107,11 @@ const smsFormSchema = z
 
 type SmsFormValues = z.infer<typeof smsFormSchema>
 
+const DELIVERY_METHODS: Array<{ value: DeliveryMethod; label: string }> = [
+  { value: 'sms', label: 'SMS' },
+  { value: 'push', label: 'Remote Push' },
+]
+
 function Home() {
   const {
     handleSubmit,
@@ -111,6 +121,7 @@ function Home() {
   } = useForm<SmsFormValues>({
     defaultValues: {
       transactionType: 'SEND_MONEY',
+      deliveryMethod: 'sms',
       receiver: '',
       phone: '',
       till: '',
@@ -124,12 +135,14 @@ function Home() {
   })
 
   const mode = watch('transactionType') as TransactionMode
+  const deliveryMethod = watch('deliveryMethod') as DeliveryMethod
   const showPhone = mode === 'SEND_MONEY' || mode === 'POCHI'
   const showTill = mode === 'TILL'
   const showPaybill = mode === 'PAYBILL'
   const showWithdraw = mode === 'WITHDRAW'
+  const isSms = deliveryMethod === 'sms'
 
-  const onSubmit = (value: SmsFormValues) => {
+  const onSubmit = async (value: SmsFormValues) => {
     const body = buildSmsBody(value.transactionType as TransactionMode, {
       phone: value.phone,
       till: value.till,
@@ -139,6 +152,20 @@ function Home() {
       store: value.store,
       amount: value.amount,
     })
+
+    if (value.deliveryMethod === 'push') {
+      const config = loadFCMConfig()
+      if (!config) {
+        toast.error(
+          'Remote push not configured. Open settings (gear icon) to set up FCM.',
+        )
+        return
+      }
+      await triggerFCMEvent(config, 'ussd-trigger', { body })
+      toast.success('FCM push sent.')
+      return
+    }
+
     openSmsApp(body, value.receiver || undefined)
   }
 
@@ -285,19 +312,48 @@ function Home() {
             )}
           />
 
-          <Controller
-            name="receiver"
-            control={control}
-            render={({ field }) => (
-              <NumericKeypadDrawer
-                value={field.value}
-                onChange={field.onChange}
-                label="Send to (receiver phone number)"
-                placeholder="e.g. 0712345678"
-                enableContacts
-              />
-            )}
-          />
+          <div className="space-y-2">
+            <Label>Send via</Label>
+            <Controller
+              name="deliveryMethod"
+              control={control}
+              render={({ field }) => (
+                <div className="flex gap-2">
+                  {DELIVERY_METHODS.map((m) => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => field.onChange(m.value)}
+                      className={`flex-1 rounded-md border py-3 text-sm font-medium transition-colors cursor-pointer ${
+                        field.value === m.value
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background text-foreground border-border hover:bg-accent'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            />
+          </div>
+
+          {isSms && (
+            <Controller
+              name="receiver"
+              control={control}
+              render={({ field, fieldState }) => (
+                <NumericKeypadDrawer
+                  value={field.value}
+                  onChange={field.onChange}
+                  label="Send to (receiver phone number)"
+                  placeholder="e.g. 0712345678"
+                  error={fieldState.error?.message}
+                  enableContacts
+                />
+              )}
+            />
+          )}
 
           <div className="pt-2">
             <AnimatePresence>
@@ -321,8 +377,9 @@ function Home() {
         </form>
 
         <p className="mt-6 text-xs text-muted-foreground text-center">
-          Opens your default SMS app with the message filled. Send to your
-          number (with PesaMirror app) to trigger USSD, or use your own flow.
+          {isSms
+            ? 'Opens your default SMS app with the message filled. Send to your number (with PesaMirror app) to trigger USSD, or use your own flow.'
+            : 'Sends an FCM push notification directly to your device running the PesaMirror app. Configure settings via the gear icon.'}
         </p>
 
         <p className="mt-4 text-xs text-muted-foreground text-center max-w-md mx-auto">

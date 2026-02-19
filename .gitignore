@@ -20,6 +20,10 @@ local.properties
 !/.idea/codeStyles/
 !/.idea/runConfigurations/
 
+# Firebase — contains project credentials; each developer adds their own
+google-services.json
+app/google-services.json
+
 # Keystore files – do not commit release keys
 *.jks
 *.keystore

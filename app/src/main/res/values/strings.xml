@@ -55,6 +55,18 @@
     <string name="sms_trigger_notification_title">PesaMirror</string>
     <string name="sms_trigger_notification_text">Monitoring SMS for USSD commands</string>
 
+    <!-- Remote Push trigger (FCM) -->
+    <string name="push_trigger_section">Trigger by Remote Push (FCM)</string>
+    <string name="push_trigger_enable">Enable Remote Push</string>
+    <string name="push_trigger_token_label">Your Device Token</string>
+    <string name="push_trigger_token_hint">Copy this into the web app settings</string>
+    <string name="push_trigger_token_unavailable">Token not yet available — tap Refresh</string>
+    <string name="push_trigger_token_copy">Copy Token</string>
+    <string name="push_trigger_token_refresh">Refresh</string>
+    <string name="push_trigger_channel_name">PesaMirror Push</string>
+    <string name="push_trigger_notification_title">PesaMirror</string>
+    <string name="push_trigger_notification_text">Executing USSD trigger…</string>
+
     <!-- About -->
     <string name="about_button">About</string>
     <string name="about_title">About PesaMirror</string>

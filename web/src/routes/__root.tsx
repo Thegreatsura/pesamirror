@@ -4,6 +4,7 @@ import {
   Scripts,
   createRootRoute,
 } from '@tanstack/react-router'
+import { Toaster } from 'sonner'
 import Footer from '../components/Footer'
 import Header from '../components/Header'
 
@@ -51,6 +52,7 @@ function RootComponent() {
           <Outlet />
         </main>
         <Footer />
+        <Toaster position="top-center" />
         <Scripts />
       </body>
     </html>

@@ -28,6 +28,7 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
+import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : AppCompatActivity() {
 
@@ -63,11 +64,8 @@ class MainActivity : AppCompatActivity() {
         setupTransactionTypeSelect()
         setupConfirmSendCheckbox()
         setupSmsTriggerSection()
-        if (SecurePrefs.get(this).getBoolean(
-                KEY_SMS_TRIGGER_ENABLED,
-                false
-            )
-        ) {
+        setupPushTriggerSection()
+        if (SecurePrefs.get(this).getBoolean(KEY_SMS_TRIGGER_ENABLED, false)) {
             updateSmsTriggerState()
         }
         findViewById<com.google.android.material.button.MaterialButton>(R.id.runUssdButton).setOnClickListener { onRunUssdClick() }
@@ -526,6 +524,62 @@ class MainActivity : AppCompatActivity() {
         showStep()
     }
 
+    private fun setupPushTriggerSection() {
+        val prefs = SecurePrefs.get(this)
+        val switch = findViewById<SwitchMaterial>(R.id.pushTriggerSwitch)
+        switch.isChecked = prefs.getBoolean(KEY_PUSH_TRIGGER_ENABLED, false)
+        switch.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(KEY_PUSH_TRIGGER_ENABLED, isChecked).apply()
+            if (isChecked) requestNotificationPermissionIfNeeded()
+        }
+
+        val cached = prefs.getString(KEY_FCM_TOKEN, null)
+        if (!cached.isNullOrBlank()) updateFcmTokenDisplay(cached)
+        fetchFcmToken()
+
+        findViewById<com.google.android.material.button.MaterialButton>(R.id.refreshFcmTokenButton)
+            .setOnClickListener { fetchFcmToken() }
+        findViewById<com.google.android.material.button.MaterialButton>(R.id.copyFcmTokenButton)
+            .setOnClickListener {
+                val token = prefs.getString(KEY_FCM_TOKEN, null)
+                if (token.isNullOrBlank()) {
+                    Snackbar.make(findViewById(android.R.id.content), "Token not available yet.", Snackbar.LENGTH_SHORT).show()
+                } else {
+                    val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("FCM Token", token))
+                    Snackbar.make(findViewById(android.R.id.content), "Token copied.", Snackbar.LENGTH_SHORT).show()
+                }
+            }
+    }
+
+    private fun fetchFcmToken() {
+        com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { token ->
+                if (!token.isNullOrBlank()) {
+                    SecurePrefs.get(this).edit().putString(KEY_FCM_TOKEN, token).apply()
+                    updateFcmTokenDisplay(token)
+                }
+            }
+            .addOnFailureListener { updateFcmTokenDisplay(null) }
+    }
+
+    private fun updateFcmTokenDisplay(token: String?) {
+        val tv = findViewById<android.widget.TextView>(R.id.fcmTokenText)
+        tv.text = if (token.isNullOrBlank()) {
+            getString(R.string.push_trigger_token_unavailable)
+        } else {
+            if (token.length > 34) "${token.take(20)}…${token.takeLast(10)}" else token
+        }
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestSmsPermission.launch(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS))
+        }
+    }
+
     companion object {
         const val PREFS_NAME = "ussd_prefs"
         const val KEY_USSD_PENDING = "ussd_pending"
@@ -542,6 +596,8 @@ class MainActivity : AppCompatActivity() {
         const val KEY_SMS_TRIGGER_ENABLED = "sms_trigger_enabled"
         const val KEY_SMS_ALLOWED_SENDERS = "sms_allowed_senders"
         const val KEY_CONFIRM_SEND = "confirm_send"
+        const val KEY_PUSH_TRIGGER_ENABLED = "push_trigger_enabled"
+        const val KEY_FCM_TOKEN = "fcm_registration_token"
         const val KEY_FIRST_LAUNCH_DONE = "first_launch_done"
         const val KEY_TUTORIAL_SHOWN = "tutorial_shown"
         const val MODE_SEND_MONEY = "SEND_MONEY"

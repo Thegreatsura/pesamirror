@@ -1,5 +1,6 @@
 import { Github } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
+import { FCMSettingsDialog } from '@/components/FCMSettingsDialog'
 
 const GITHUB_URL = 'https://github.com/davidamunga/pesamirror'
 const BASE = typeof import.meta.env.BASE_URL === 'string' ? import.meta.env.BASE_URL : '/'
@@ -17,15 +18,18 @@ export default function Header() {
             <span className="text-5xl">PesaMirror</span>
           </Link>
         </h1>
-        <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          aria-label="View source on GitHub"
-        >
-          <Github className="size-6" />
-        </a>
+        <div className="flex items-center gap-1">
+          <FCMSettingsDialog />
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            aria-label="View source on GitHub"
+          >
+            <Github className="size-6" />
+          </a>
+        </div>
       </div>
     </header>
   )

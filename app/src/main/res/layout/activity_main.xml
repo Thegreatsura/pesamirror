@@ -327,6 +327,84 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/smsPatternsLabel" />
 
+        <!-- Push trigger section -->
+        <View
+            android:id="@+id/pushTriggerDivider"
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_marginTop="24dp"
+            android:background="?android:attr/listDivider"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/smsPatternsList" />
+
+        <TextView
+            android:id="@+id/pushTriggerSectionTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/push_trigger_section"
+            android:textAppearance="?attr/textAppearanceTitleMedium"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/pushTriggerDivider" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/pushTriggerSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/push_trigger_enable"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/pushTriggerSectionTitle" />
+
+        <!-- FCM device token (read-only) + action buttons -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/fcmTokenLayout"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/push_trigger_token_label"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/pushTriggerSwitch">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/fcmTokenText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/push_trigger_token_hint"
+                android:focusable="false"
+                android:inputType="none"
+                android:textIsSelectable="true" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <LinearLayout
+            android:id="@+id/fcmTokenButtons"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:gravity="end"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/fcmTokenLayout">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/refreshFcmTokenButton"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/push_trigger_token_refresh" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/copyFcmTokenButton"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/push_trigger_token_copy" />
+        </LinearLayout>
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/runUssdButton"
             android:layout_width="0dp"
@@ -335,7 +413,7 @@
             android:text="@string/run_ussd"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/smsPatternsList" />
+            app:layout_constraintTop_toBottomOf="@id/fcmTokenButtons" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/accessibilitySettingsButton"
