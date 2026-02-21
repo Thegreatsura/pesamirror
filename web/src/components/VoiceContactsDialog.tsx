@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { BookUser, Pencil, Plus, Trash2, UserRound } from 'lucide-react'
 import { toast } from 'sonner'
-import type { VoiceContact } from '@/lib/voice-contacts'
+import type { ContactType, VoiceContact } from '@/lib/voice-contacts'
 import {
   clearVoiceContacts,
   deleteVoiceContact,
@@ -14,21 +14,63 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
-type FormState = { name: string; phone: string }
-const EMPTY_FORM: FormState = { name: '', phone: '' }
+const TYPE_LABELS: Record<ContactType, string> = {
+  mobile: 'Mobile',
+  pochi: 'Pochi',
+  till: 'Till',
+  paybill: 'Paybill',
+}
+
+const TYPE_BADGE: Record<ContactType, string> = {
+  mobile: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  pochi: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+  till: 'bg-green-500/10 text-green-600 dark:text-green-400',
+  paybill: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+}
+
+const PHONE_LABELS: Record<ContactType, string> = {
+  mobile: 'Phone Number',
+  pochi: 'Phone Number',
+  till: 'Till Number',
+  paybill: 'Business Number',
+}
+
+const PHONE_PLACEHOLDERS: Record<ContactType, string> = {
+  mobile: 'e.g. 0712345678',
+  pochi: 'e.g. 0712345678',
+  till: 'e.g. 522533',
+  paybill: 'e.g. 247247',
+}
+
+type FormState = {
+  name: string
+  type: ContactType
+  phone: string
+  accountNumber: string
+}
+
+const EMPTY_FORM: FormState = {
+  name: '',
+  type: 'mobile',
+  phone: '',
+  accountNumber: '',
+}
 
 export function VoiceContactsDialog() {
   const [open, setOpen] = React.useState(false)
   const [contacts, setContacts] = React.useState<Array<VoiceContact>>([])
   const [loading, setLoading] = React.useState(false)
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM)
-  const [editing, setEditing] = React.useState<string | null>(null) 
+  const [editing, setEditing] = React.useState<string | null>(null)
   const [formVisible, setFormVisible] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
   const [saving, setSaving] = React.useState(false)
@@ -56,7 +98,12 @@ export function VoiceContactsDialog() {
 
   function startEdit(contact: VoiceContact) {
     setEditing(contact.name)
-    setForm({ name: contact.name, phone: contact.phone })
+    setForm({
+      name: contact.name,
+      type: contact.type ?? 'mobile',
+      phone: contact.phone,
+      accountNumber: contact.accountNumber ?? '',
+    })
     setFormError(null)
     setFormVisible(true)
   }
@@ -71,24 +118,42 @@ export function VoiceContactsDialog() {
   async function handleSave() {
     const name = form.name.trim()
     const phone = form.phone.trim()
+    const accountNumber = form.accountNumber.trim()
 
     if (!name) {
       setFormError('Name is required.')
       return
     }
     if (!phone) {
-      setFormError('Phone number is required.')
-      return
-    }
-    if (!/^[+\d\s\-()]{7,15}$/.test(phone)) {
-      setFormError('Enter a valid phone number (e.g. 0712345678).')
+      setFormError(`${PHONE_LABELS[form.type]} is required.`)
       return
     }
 
-    // Prevent duplicate names when adding (not when editing the same contact)
+    if (form.type === 'mobile' || form.type === 'pochi') {
+      if (!/^[+\d\s\-()]{7,15}$/.test(phone)) {
+        setFormError('Enter a valid phone number (e.g. 0712345678).')
+        return
+      }
+    } else {
+      if (!/^\d{4,15}$/.test(phone)) {
+        setFormError(
+          `Enter a valid ${PHONE_LABELS[form.type].toLowerCase()} (digits only).`,
+        )
+        return
+      }
+    }
+
+    if (
+      form.type === 'paybill' &&
+      accountNumber &&
+      !/^[\w-]{1,30}$/.test(accountNumber)
+    ) {
+      setFormError('Enter a valid account number.')
+      return
+    }
+
     const duplicate = contacts.find(
-      (c) =>
-        c.name.toLowerCase() === name.toLowerCase() && c.name !== editing,
+      (c) => c.name.toLowerCase() === name.toLowerCase() && c.name !== editing,
     )
     if (duplicate) {
       setFormError(`A contact named "${name}" already exists.`)
@@ -97,11 +162,15 @@ export function VoiceContactsDialog() {
 
     setSaving(true)
     try {
-      // If editing, remove the old name first so rename works correctly
       if (editing && editing.toLowerCase() !== name.toLowerCase()) {
         await deleteVoiceContact(editing)
       }
-      await saveVoiceContact({ name, phone })
+      await saveVoiceContact({
+        name,
+        type: form.type,
+        phone,
+        accountNumber: accountNumber || undefined,
+      })
       setContacts(getVoiceContacts())
       cancelForm()
       toast.success(editing ? 'Contact updated.' : 'Contact saved.')
@@ -125,25 +194,34 @@ export function VoiceContactsDialog() {
   }
 
   async function handlePickFromDevice() {
-    type ContactsAPI = { select: (props: Array<string>, opts: { multiple: boolean }) => Promise<Array<{ name: Array<string>; tel: Array<string> }>> }
-    const contactsApi = (navigator as unknown as { contacts?: ContactsAPI }).contacts
+    type ContactsAPI = {
+      select: (
+        props: Array<string>,
+        opts: { multiple: boolean },
+      ) => Promise<Array<{ name: Array<string>; tel: Array<string> }>>
+    }
+    const contactsApi = (navigator as unknown as { contacts?: ContactsAPI })
+      .contacts
     if (!contactsApi?.select) {
       toast.error('Contacts Picker is not supported in this browser.')
       return
     }
     try {
-      const results = await contactsApi.select(['name', 'tel'], { multiple: true })
+      const results = await contactsApi.select(['name', 'tel'], {
+        multiple: true,
+      })
       let added = 0
       for (const r of results) {
         const name = r.name[0]?.trim()
         const phone = r.tel[0]?.trim()
         if (name && phone) {
-          await saveVoiceContact({ name, phone })
+          await saveVoiceContact({ name, type: 'mobile', phone })
           added++
         }
       }
       setContacts(getVoiceContacts())
-      if (added > 0) toast.success(`${added} contact${added > 1 ? 's' : ''} imported.`)
+      if (added > 0)
+        toast.success(`${added} contact${added > 1 ? 's' : ''} imported.`)
     } catch {
       toast.error('Could not import contacts.')
     }
@@ -170,7 +248,7 @@ export function VoiceContactsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+      <DialogTrigger>
         <Button
           variant="ghost"
           size="icon"
@@ -193,7 +271,7 @@ export function VoiceContactsDialog() {
         <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
           {loading && (
             <p className="text-sm text-muted-foreground text-center py-4">
-              Loading…
+              Loading&hellip;
             </p>
           )}
           {!loading && contacts.length === 0 && (
@@ -201,45 +279,64 @@ export function VoiceContactsDialog() {
               <UserRound className="size-8 text-muted-foreground/50" />
               <p className="text-sm text-muted-foreground">No contacts yet.</p>
               <p className="text-xs text-muted-foreground">
-                Add contacts so you can say &ldquo;send 500 to David&rdquo;.
+                Add contacts so you can say &ldquo;send 500 to David&rdquo; or
+                &ldquo;pay KFC 300&rdquo;.
               </p>
             </div>
           )}
-          {!loading &&
-            contacts.map((c) => (
-              <div
-                key={c.name}
-                className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-accent group"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{c.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {c.phone}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => startEdit(c)}
-                    aria-label={`Edit ${c.name}`}
+          <ScrollArea className="max-h-[80vh]">
+            {!loading &&
+              contacts.map((c) => {
+                const type = c.type ?? 'mobile'
+                return (
+                  <div
+                    key={c.name}
+                    className="flex cursor-pointer items-center justify-between gap-2  px-2 py-1.5 hover:bg-accent group"
                   >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-destructive hover:bg-destructive/10"
-                    onClick={() => handleDelete(c.name)}
-                    aria-label={`Delete ${c.name}`}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-sm font-medium truncate">{c.name}</p>
+                        <span
+                          className={cn(
+                            'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none',
+                            TYPE_BADGE[type],
+                          )}
+                        >
+                          {TYPE_LABELS[type]}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {type === 'paybill' && c.accountNumber
+                          ? `${c.phone} / Acc: ${c.accountNumber}`
+                          : c.phone}
+                      </p>
+                    </div>
+                    {/* Always visible on touch, hover-fade on pointer devices */}
+                    <div className="flex items-center gap-1 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => startEdit(c)}
+                        aria-label={`Edit ${c.name}`}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDelete(c.name)}
+                        aria-label={`Delete ${c.name}`}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+          </ScrollArea>
         </div>
 
         {/* Add / Edit form */}
@@ -248,12 +345,48 @@ export function VoiceContactsDialog() {
             <p className="text-xs font-medium text-muted-foreground">
               {editing ? `Editing "${editing}"` : 'New contact'}
             </p>
+
+            {/* Contact type selector */}
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <div className="grid grid-cols-4 gap-1">
+                {(Object.keys(TYPE_LABELS) as Array<ContactType>).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        type: t,
+                        phone: '',
+                        accountNumber: '',
+                      }))
+                    }
+                    className={cn(
+                      'rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
+                      form.type === t
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-input text-muted-foreground hover:bg-accent',
+                    )}
+                  >
+                    {TYPE_LABELS[t]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="vc-name">Name</Label>
               <input
                 id="vc-name"
                 type="text"
-                placeholder="e.g. David"
+                placeholder={
+                  form.type === 'till'
+                    ? 'e.g. KFC Westlands'
+                    : form.type === 'paybill'
+                      ? 'e.g. Safaricom'
+                      : 'e.g. David'
+                }
                 value={form.name}
                 onChange={(e) => {
                   setForm((f) => ({ ...f, name: e.target.value }))
@@ -263,12 +396,13 @@ export function VoiceContactsDialog() {
                 className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
               />
             </div>
+
             <div className="space-y-1.5">
-              <Label htmlFor="vc-phone">Phone</Label>
+              <Label htmlFor="vc-phone">{PHONE_LABELS[form.type]}</Label>
               <input
                 id="vc-phone"
                 type="tel"
-                placeholder="e.g. 0712345678"
+                placeholder={PHONE_PLACEHOLDERS[form.type]}
                 value={form.phone}
                 onChange={(e) => {
                   setForm((f) => ({ ...f, phone: e.target.value }))
@@ -278,6 +412,34 @@ export function VoiceContactsDialog() {
                 className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
               />
             </div>
+
+            {form.type === 'paybill' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="vc-account">
+                  Account Number{' '}
+                  <span className="text-muted-foreground font-normal">
+                    (optional)
+                  </span>
+                </Label>
+                <input
+                  id="vc-account"
+                  type="text"
+                  placeholder="e.g. 1234 or your account ref"
+                  value={form.accountNumber}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, accountNumber: e.target.value }))
+                    setFormError(null)
+                  }}
+                  autoComplete="off"
+                  className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
+                />
+                <p className="text-muted-foreground text-xs">
+                  Save your account number to use &ldquo;pay{' '}
+                  {form.name || 'Safaricom'} 500&rdquo; hands-free.
+                </p>
+              </div>
+            )}
+
             {formError && (
               <p className="text-xs text-destructive">{formError}</p>
             )}
@@ -285,16 +447,17 @@ export function VoiceContactsDialog() {
               <Button
                 type="button"
                 size="sm"
-                className="flex-1"
+                className="flex-1 py-6"
                 onClick={handleSave}
                 disabled={saving}
               >
-                {saving ? 'Saving…' : editing ? 'Update' : 'Add'}
+                {saving ? 'Saving\u2026' : editing ? 'Update' : 'Add'}
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
+                className="flex-1 py-6"
                 onClick={cancelForm}
                 disabled={saving}
               >
@@ -303,12 +466,12 @@ export function VoiceContactsDialog() {
             </div>
           </div>
         ) : (
-          <div className="flex gap-2">
+          <DialogFooter className="flex flex-row gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="flex-1 gap-1.5"
+              className="flex-1 gap-1.5 py-6"
               onClick={startAdd}
             >
               <Plus className="size-3.5" />
@@ -318,19 +481,19 @@ export function VoiceContactsDialog() {
               type="button"
               variant="outline"
               size="sm"
-              className="flex-1 gap-1.5"
+              className="flex-1 gap-1.5 py-6"
               onClick={handlePickFromDevice}
             >
               <BookUser className="size-3.5" />
               Import
             </Button>
-          </div>
+          </DialogFooter>
         )}
 
         {contacts.length > 0 && !isFormOpen && (
           <button
             type="button"
-            className="w-full text-xs text-destructive/70 hover:text-destructive text-center transition-colors"
+            className="w-full text-xs py-4 cursor-pointer text-destructive/70 hover:text-destructive text-center transition-colors"
             onClick={handleClearAll}
           >
             Clear all contacts

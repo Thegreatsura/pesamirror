@@ -58,7 +58,7 @@ export function VoiceCommandButton({
           disabled={!isSupported || isActive}
           className={cn(
             'relative flex h-16 w-16 items-center justify-center rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none',
-            isListening && 'border-destructive bg-destructive/10 text-destructive',
+            isListening && 'border-green-600 bg-green-600/10 text-green-600',
             (state === 'processing' || state === 'confirming') &&
               'border-primary bg-primary/10 text-primary',
             state === 'error' &&
@@ -78,7 +78,7 @@ export function VoiceCommandButton({
           {/* Pulse ring when listening */}
           {isListening && (
             <motion.span
-              className="absolute inset-0 rounded-full border-2 border-destructive"
+              className="absolute inset-0 rounded-full border-2 border-green-600"
               animate={{ scale: [1, 1.5], opacity: [0.6, 0] }}
               transition={{ duration: 1.2, repeat: Infinity, ease: 'easeOut' }}
             />

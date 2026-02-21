@@ -4,6 +4,8 @@ export type ParsedIntent =
   | { type: 'PAYBILL'; amount: string; business: string; account: string }
   | { type: 'TILL'; amount: string; till: string }
   | { type: 'WITHDRAW'; amount: string; agent: string; store: string }
+  /** Resolved at runtime by looking up a saved till/paybill/mobile contact by name. */
+  | { type: 'NAMED_PAYMENT'; amount: string; contactName: string }
 
 const AMOUNT_RE = '(\\d+(?:[,.]\\d+)?)'
 const PHONE_OR_NAME_RE = '([\\w\\s]+?)'
@@ -100,6 +102,22 @@ export function parseIntent(transcript: string): ParsedIntent | null {
     }
   }
 
+  // NAMED_PAYMENT: "pay <contact-name> <amount>" — name resolved from saved contacts at runtime
+  // Must come after explicit PAYBILL/TILL so those patterns take precedence.
+  const namedMatch = t.match(
+    new RegExp(
+      `^(?:pay|buy\\s+(?:at|from))\\s+([a-z][a-z0-9\\s]*?)\\s+(?:amount\\s+)?${AMOUNT_RE}$`,
+      'i',
+    ),
+  )
+  if (namedMatch) {
+    return {
+      type: 'NAMED_PAYMENT',
+      contactName: namedMatch[1].trim(),
+      amount: normalizeAmount(namedMatch[2]),
+    }
+  }
+
   return null
 }
 
@@ -121,5 +139,7 @@ export function describeIntent(intent: ParsedIntent): string {
       return `Buy goods at till ${intent.till}, amount ${intent.amount} shillings.`
     case 'WITHDRAW':
       return `Withdraw ${intent.amount} shillings from agent ${intent.agent}, store ${intent.store}.`
+    case 'NAMED_PAYMENT':
+      return `Pay ${intent.amount} shillings to ${intent.contactName}.`
   }
 }

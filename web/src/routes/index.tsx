@@ -1,12 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AnimatePresence, motion } from 'motion/react'
+import { ArrowUpRight, Banknote, Building2, Smartphone, Store } from 'lucide-react'
 import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 import type { ParsedIntent } from '@/lib/intent'
 import type { TransactionMode } from '@/lib/sms'
-import { TRANSACTION_TYPES, buildSmsBody, openSmsApp } from '@/lib/sms'
+import { buildSmsBody, openSmsApp } from '@/lib/sms'
 import { loadFCMConfig, triggerFCMEvent } from '@/lib/fcm'
 import { NumericKeypadDrawer } from '@/components/NumericKeypadDrawer'
 import { VoiceCommandDrawer } from '@/components/VoiceCommandDrawer'
@@ -17,8 +18,45 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
+
+const TRANSACTION_OPTIONS: Array<{
+  value: TransactionMode
+  label: string
+  description: string
+  icon: typeof ArrowUpRight
+}> = [
+  {
+    value: 'SEND_MONEY',
+    label: 'Send Money',
+    description: 'Send to a phone number',
+    icon: ArrowUpRight,
+  },
+  {
+    value: 'POCHI',
+    label: 'Pochi',
+    description: 'Send to a Pochi number',
+    icon: Smartphone,
+  },
+  {
+    value: 'PAYBILL',
+    label: 'Paybill',
+    description: 'Pay a business bill',
+    icon: Building2,
+  },
+  {
+    value: 'TILL',
+    label: 'Buy Goods (Till)',
+    description: 'Pay a till number',
+    icon: Store,
+  },
+  {
+    value: 'WITHDRAW',
+    label: 'Withdraw Cash',
+    description: 'Withdraw at an agent',
+    icon: Banknote,
+  },
+]
 
 export const Route = createFileRoute('/')({ component: Home })
 
@@ -189,27 +227,58 @@ function Home() {
             <Controller
               name="transactionType"
               control={control}
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger
-                    id="transactionType"
-                    className="w-full py-8 text-3xl! font-bold text-start border"
-                  >
-                    <SelectValue placeholder="Choose transaction type" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    {TRANSACTION_TYPES.map((t) => (
-                      <SelectItem
-                        className="text-3xl! font-bold"
-                        key={t.value}
-                        value={t.value}
-                      >
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              render={({ field }) => {
+                const selected = TRANSACTION_OPTIONS.find(
+                  (t) => t.value === field.value,
+                )
+                const SelectedIcon = selected?.icon ?? ArrowUpRight
+                return (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger
+                      id="transactionType"
+                      className="w-full py-6 text-start border"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <SelectedIcon className="size-5" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-lg font-bold leading-tight truncate">
+                            {selected?.label ?? 'Choose transaction type'}
+                          </p>
+                          {selected && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {selected.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRANSACTION_OPTIONS.map((t) => {
+                        const Icon = t.icon
+                        return (
+                          <SelectItem key={t.value} value={t.value}>
+                            <div className="flex items-center gap-3 py-0.5">
+                              <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                <Icon className="size-4" />
+                              </span>
+                              <div>
+                                <p className="font-medium leading-tight">
+                                  {t.label}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {t.description}
+                                </p>
+                              </div>
+                            </div>
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                )
+              }}
             />
           </div>
 

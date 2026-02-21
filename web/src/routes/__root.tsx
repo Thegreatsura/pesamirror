@@ -13,7 +13,15 @@ import appCss from '../styles.css?url'
 
 const darkModeScript = `
 (function() {
-  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var stored = localStorage.getItem('theme');
+  var dark;
+  if (stored === 'dark') {
+    dark = true;
+  } else if (stored === 'light') {
+    dark = false;
+  } else {
+    dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
   document.documentElement.classList.toggle('dark', dark);
 })();
 `

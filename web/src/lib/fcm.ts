@@ -10,7 +10,8 @@
  * app even when killed; no persistent connection needed).
  */
 
-import { encryptPlaintext, isEncryptedBlob } from './crypto-storage'
+import { decryptPlaintext, encryptPlaintext, isEncryptedBlob } from './crypto-storage'
+import type { EncryptedBlob } from './crypto-storage'
 
 export interface ServiceAccount {
   type?: string
@@ -29,7 +30,7 @@ export interface FCMConfig {
 
 const STORAGE_KEY = 'pesamirror_fcm_config'
 const SESSION_KEY = 'pesamirror_fcm_config_session'
-const SESSION_KEY_ENC = 'pesamirror_fcm_enc_key'
+const STORAGE_KEY_PASSPHRASE = 'pesamirror_fcm_enc_key'
 
 function randomPassphrase(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
@@ -62,8 +63,8 @@ export function isFCMConfigEncrypted(): boolean {
 }
 
 /**
- * Load FCM config. Returns session-unlocked config if available, else plain
- * localStorage config. Returns null if storage is empty or encrypted and not unlocked.
+ * Load FCM config synchronously from sessionStorage cache.
+ * Call initFCMConfig() first to populate the cache from encrypted localStorage.
  */
 export function loadFCMConfig(): FCMConfig | null {
   try {
@@ -82,26 +83,49 @@ export function loadFCMConfig(): FCMConfig | null {
 }
 
 /**
- * Save FCM config. Always encrypts at rest with a random session key (stored
- * in sessionStorage). Decrypted config is also written to session so
- * loadFCMConfig() works in this tab. New tab = no key = must paste & save again.
+ * Decrypt FCM config from localStorage into sessionStorage so loadFCMConfig()
+ * works synchronously. Call once on app start or when opening the settings dialog.
+ */
+export async function initFCMConfig(): Promise<void> {
+  if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(SESSION_KEY)) {
+    return
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    const passphrase = localStorage.getItem(STORAGE_KEY_PASSPHRASE)
+    if (!raw || !passphrase || !isEncryptedBlob(raw)) return
+    const decrypted = await decryptPlaintext(JSON.parse(raw) as EncryptedBlob, passphrase)
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(SESSION_KEY, decrypted)
+    }
+  } catch {
+    // ignore decrypt failures (corrupted data, wrong key)
+  }
+}
+
+/**
+ * Save FCM config. Encrypts at rest with a key stored in localStorage so it
+ * survives new tabs and browser restarts on the same device.
  */
 export async function saveFCMConfig(config: FCMConfig): Promise<void> {
   const plain = JSON.stringify(config)
-  const key = randomPassphrase()
+  let key = localStorage.getItem(STORAGE_KEY_PASSPHRASE)
+  if (!key) {
+    key = randomPassphrase()
+    localStorage.setItem(STORAGE_KEY_PASSPHRASE, key)
+  }
   const blob = await encryptPlaintext(plain, key)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(blob))
   if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.setItem(SESSION_KEY_ENC, key)
     sessionStorage.setItem(SESSION_KEY, plain)
   }
 }
 
 export function clearFCMConfig(): void {
   localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(STORAGE_KEY_PASSPHRASE)
   if (typeof sessionStorage !== 'undefined') {
     sessionStorage.removeItem(SESSION_KEY)
-    sessionStorage.removeItem(SESSION_KEY_ENC)
   }
 }
 

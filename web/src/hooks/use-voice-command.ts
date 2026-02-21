@@ -5,6 +5,7 @@ import { isSpeechRecognitionSupported, listenOnce } from '@/lib/stt'
 import { cancelSpeech, speak } from '@/lib/tts'
 import {
   initVoiceContacts,
+  resolveContact,
   resolvePhoneOrName,
   saveVoiceContact,
 } from '@/lib/voice-contacts'
@@ -132,6 +133,60 @@ export function useVoiceCommand(
         )
         return
       }
+    }
+
+    // Resolve named till/paybill/mobile contacts
+    if (intent.type === 'NAMED_PAYMENT') {
+      const contact = resolveContact(intent.contactName)
+      if (!contact) {
+        setError(
+          `I couldn't find "${intent.contactName}" in your contacts. Add it first under Voice Contacts.`,
+        )
+        return
+      }
+      const contactType = contact.type ?? 'mobile'
+      let resolvedIntent: ParsedIntent
+      if (contactType === 'till') {
+        resolvedIntent = { type: 'TILL', amount: intent.amount, till: contact.phone }
+      } else if (contactType === 'paybill') {
+        if (!contact.accountNumber) {
+          setError(
+            `${contact.name} needs an account number. Edit the contact to add one, or say: pay bill ${contact.phone} account <number> ${intent.amount}`,
+          )
+          return
+        }
+        resolvedIntent = { type: 'PAYBILL', amount: intent.amount, business: contact.phone, account: contact.accountNumber }
+      } else if (contactType === 'pochi') {
+        resolvedIntent = { type: 'POCHI', amount: intent.amount, phone: contact.phone }
+      } else {
+        resolvedIntent = { type: 'SEND_MONEY', amount: intent.amount, phone: contact.phone }
+      }
+      setPendingIntent(resolvedIntent)
+      pendingIntentRef.current = resolvedIntent
+      setState('confirming')
+      const description = describeIntent(resolvedIntent)
+      try {
+        await speak(`${description} Say yes to confirm, or no to cancel.`)
+      } catch {
+        // TTS unavailable — on-screen buttons serve as fallback
+      }
+      setState('awaiting_confirmation')
+      let response: string
+      try {
+        response = await listenOnce('en-US')
+      } catch {
+        setState('confirming')
+        speak("I couldn't hear you. Tap yes or no on screen.").catch(() => {})
+        return
+      }
+      if (/^(yes|yeah|yep|yup|confirm|send|do it|go|ok|okay)/i.test(response.trim())) {
+        executeConfirm(resolvedIntent, raw)
+      } else {
+        speak('Okay, no problem. Cancelled.').catch(() => {})
+        reset()
+        onDismiss?.()
+      }
+      return
     }
 
     setPendingIntent(intent)

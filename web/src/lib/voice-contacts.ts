@@ -1,7 +1,17 @@
 import { encryptPlaintext, decryptPlaintext, isEncryptedBlob } from './crypto-storage'
 import type { EncryptedBlob } from './crypto-storage'
 
-export type VoiceContact = { name: string; phone: string }
+export type ContactType = 'mobile' | 'pochi' | 'till' | 'paybill'
+
+export type VoiceContact = {
+  name: string
+  /** Defaults to 'mobile' when omitted (backward compatible with legacy contacts). */
+  type?: ContactType
+  /** Phone number (mobile/pochi), till number (till), or business number (paybill). */
+  phone: string
+  /** Account number — only used for paybill contacts. */
+  accountNumber?: string
+}
 
 const STORAGE_KEY = 'pesamirror_voice_contacts'
 const STORAGE_KEY_PASSPHRASE = 'pesamirror_voice_contacts_key'
@@ -104,15 +114,18 @@ async function persistContacts(contacts: VoiceContact[]): Promise<void> {
 
 export async function saveVoiceContact(contact: VoiceContact): Promise<void> {
   const contacts = getVoiceContacts()
-  const normalized = normalizePhone(contact.phone)
+  const isMobileType = !contact.type || contact.type === 'mobile' || contact.type === 'pochi'
+  const phone = isMobileType ? normalizePhone(contact.phone) : contact.phone.replace(/\s/g, '')
   const existing = contacts.findIndex(
     (c) => c.name.toLowerCase() === contact.name.toLowerCase(),
   )
   const updated = [...contacts]
+  const entry: VoiceContact = { name: contact.name, type: contact.type ?? 'mobile', phone }
+  if (contact.accountNumber?.trim()) entry.accountNumber = contact.accountNumber.trim()
   if (existing >= 0) {
-    updated[existing] = { name: contact.name, phone: normalized }
+    updated[existing] = entry
   } else {
-    updated.push({ name: contact.name, phone: normalized })
+    updated.push(entry)
   }
   await persistContacts(updated)
 }
@@ -134,14 +147,17 @@ export async function clearVoiceContacts(): Promise<void> {
 }
 
 /**
- * Resolve a voice query to a phone number.
+ * Resolve a voice query to a phone number for mobile/pochi contacts.
  * Returns the phone if the query is numeric, or looks up by name from cache.
+ * Only matches contacts of type 'mobile', 'pochi', or legacy untyped contacts.
  */
 export function resolvePhoneOrName(query: string): string | null {
   const cleaned = query.trim()
   if (isPhoneNumber(cleaned)) return normalizePhone(cleaned)
 
-  const contacts = getVoiceContacts()
+  const contacts = getVoiceContacts().filter(
+    (c) => !c.type || c.type === 'mobile' || c.type === 'pochi',
+  )
   const lower = cleaned.toLowerCase()
 
   const exact = contacts.find((c) => c.name.toLowerCase() === lower)
@@ -158,6 +174,28 @@ export function resolvePhoneOrName(query: string): string | null {
   if (overlap) return overlap.phone
 
   return null
+}
+
+/**
+ * Resolve a contact name to its full VoiceContact record (any type).
+ * Used for named till/paybill/pochi lookups in voice commands.
+ */
+export function resolveContact(query: string): VoiceContact | null {
+  const contacts = getVoiceContacts()
+  const lower = query.trim().toLowerCase()
+
+  const exact = contacts.find((c) => c.name.toLowerCase() === lower)
+  if (exact) return exact
+
+  const partial = contacts.find((c) => c.name.toLowerCase().startsWith(lower))
+  if (partial) return partial
+
+  const queryWords = lower.split(/\s+/)
+  const overlap = contacts.find((c) => {
+    const nameWords = c.name.toLowerCase().split(/\s+/)
+    return queryWords.every((w) => nameWords.some((nw) => nw.startsWith(w)))
+  })
+  return overlap ?? null
 }
 
 function isPhoneNumber(s: string): boolean {

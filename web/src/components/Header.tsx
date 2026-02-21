@@ -2,6 +2,7 @@ import { Github } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { FCMSettingsDialog } from '@/components/FCMSettingsDialog'
 import { VoiceContactsDialog } from '@/components/VoiceContactsDialog'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 const GITHUB_URL = 'https://github.com/davidamunga/pesamirror'
 const BASE = typeof import.meta.env.BASE_URL === 'string' ? import.meta.env.BASE_URL : '/'
@@ -22,6 +23,7 @@ export default function Header() {
         <div className="flex items-center gap-1">
           <VoiceContactsDialog />
           <FCMSettingsDialog />
+          <ThemeToggle />
           <a
             href={GITHUB_URL}
             target="_blank"

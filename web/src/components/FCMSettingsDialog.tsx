@@ -2,7 +2,13 @@ import * as React from 'react'
 import { Copy, Eye, EyeOff, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ServiceAccount } from '@/lib/fcm'
-import { clearFCMConfig, isFCMConfigEncrypted, loadFCMConfig, saveFCMConfig } from '@/lib/fcm'
+import {
+  clearFCMConfig,
+  initFCMConfig,
+  isFCMConfigEncrypted,
+  loadFCMConfig,
+  saveFCMConfig,
+} from '@/lib/fcm'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -49,34 +55,42 @@ export function FCMSettingsDialog({ children }: Props) {
   const [error, setError] = React.useState<string | null>(null)
   const [maskCredentials, setMaskCredentials] = React.useState(true)
   const [saveLoading, setSaveLoading] = React.useState(false)
-
-  const hasEncryptedOtherSession = open && isFCMConfigEncrypted() && !loadFCMConfig()
+  const [hasUnreadableConfig, setHasUnreadableConfig] = React.useState(false)
 
   React.useEffect(() => {
     if (!open) return
-    const stored = loadFCMConfig()
-    if (stored) {
-      setSaJson(JSON.stringify(stored.serviceAccount, null, 2))
-      setDeviceToken(stored.deviceToken)
-      setMaskCredentials(true)
-    } else {
-      setSaJson('')
-      setDeviceToken('')
-      setMaskCredentials(false)
-    }
-    setSaved(false)
-    setError(null)
+    initFCMConfig().then(() => {
+      const stored = loadFCMConfig()
+      setHasUnreadableConfig(isFCMConfigEncrypted() && !stored)
+      if (stored) {
+        setSaJson(JSON.stringify(stored.serviceAccount, null, 2))
+        setDeviceToken(stored.deviceToken)
+        setMaskCredentials(true)
+      } else {
+        setSaJson('')
+        setDeviceToken('')
+        setMaskCredentials(false)
+      }
+      setSaved(false)
+      setError(null)
+    })
   }, [open])
 
   const hasStoredConfig = Boolean(saJson.trim() && deviceToken.trim())
   const displaySaJson = maskCredentials ? redactPrivateKey(saJson) : saJson
 
   function handleClearCredentials() {
-    if (!confirm('Remove saved FCM credentials from this device? You can add them again later.')) return
+    if (
+      !confirm(
+        'Remove saved FCM credentials from this device? You can add them again later.',
+      )
+    )
+      return
     clearFCMConfig()
     setSaJson('')
     setDeviceToken('')
     setMaskCredentials(false)
+    setHasUnreadableConfig(false)
     setError(null)
   }
 
@@ -105,7 +119,10 @@ export function FCMSettingsDialog({ children }: Props) {
     }
     setSaveLoading(true)
     try {
-      await saveFCMConfig({ serviceAccount: sa, deviceToken: deviceToken.trim() })
+      await saveFCMConfig({
+        serviceAccount: sa,
+        deviceToken: deviceToken.trim(),
+      })
       setSaved(true)
       setTimeout(() => setOpen(false), 600)
     } catch (e) {
@@ -128,7 +145,7 @@ export function FCMSettingsDialog({ children }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+      <DialogTrigger>
         {children ?? (
           <Button
             variant="ghost"
@@ -154,15 +171,16 @@ export function FCMSettingsDialog({ children }: Props) {
             >
               Firebase Cloud Messaging
             </a>
-            . Stateless — FCM wakes the Android app even when it&apos;s killed.
+            . Stateless &mdash; FCM wakes the Android app even when it&apos;s
+            killed.
           </DialogDescription>
         </DialogHeader>
 
-        {hasEncryptedOtherSession && (
-          <div className="flex items-start justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
+        {hasUnreadableConfig && (
+          <div className="flex  items-start justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
             <p className="text-muted-foreground flex-1">
-              Credentials from another tab or session aren’t available here.
-              Paste below to save in this tab, or clear saved data.
+              Saved credentials could not be decrypted (possible data
+              corruption). Paste below to overwrite, or clear saved data.
             </p>
             <Button
               type="button"
@@ -174,6 +192,7 @@ export function FCMSettingsDialog({ children }: Props) {
                   clearFCMConfig()
                   setSaJson('')
                   setDeviceToken('')
+                  setHasUnreadableConfig(false)
                   setError(null)
                 }
               }}
@@ -183,7 +202,7 @@ export function FCMSettingsDialog({ children }: Props) {
             </Button>
           </div>
         )}
-        <div className="space-y-3">
+        <div className="space-y-3 px-4">
           <p className="text-muted-foreground text-xs">
             Credentials are stored only on this device and encrypted at rest.
           </p>
@@ -243,8 +262,8 @@ export function FCMSettingsDialog({ children }: Props) {
               className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 font-mono text-xs shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none resize-none disabled:opacity-90"
             />
             <p className="text-muted-foreground text-xs">
-              Firebase Console → Project Settings → Service accounts → Generate
-              new private key.
+              Firebase Console &rarr; Project Settings &rarr; Service accounts
+              &rarr; Generate new private key.
             </p>
           </div>
 
@@ -264,8 +283,8 @@ export function FCMSettingsDialog({ children }: Props) {
               className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs transition-colors focus-visible:ring-1 focus-visible:outline-none"
             />
             <p className="text-muted-foreground text-xs">
-              Shown in the Android app under Remote Push settings — tap Copy
-              Token.
+              Shown in the Android app under Remote Push settings &mdash; tap
+              Copy Token.
             </p>
           </div>
 
@@ -273,25 +292,25 @@ export function FCMSettingsDialog({ children }: Props) {
         </div>
 
         <DialogFooter className="flex-col gap-2 sm:flex-row">
-            {hasStoredConfig && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full border-destructive/50 text-destructive hover:bg-destructive/10 sm:w-auto"
-                onClick={handleClearCredentials}
-              >
-                <Trash2 className="size-4 mr-1.5" />
-                Clear credentials
-              </Button>
-            )}
+          {hasStoredConfig && (
             <Button
-              onClick={handleSave}
-              disabled={!canSave || saveLoading}
-              className="w-full sm:flex-1"
+              type="button"
+              variant="outline"
+              className="w-full border-destructive/50 text-destructive hover:bg-destructive/10 sm:w-auto"
+              onClick={handleClearCredentials}
             >
-              {saveLoading ? 'Saving…' : saved ? 'Saved!' : 'Save'}
+              <Trash2 className="size-4 mr-1.5" />
+              Clear credentials
             </Button>
-          </DialogFooter>
+          )}
+          <Button
+            onClick={handleSave}
+            disabled={!canSave || saveLoading}
+            className="w-full sm:flex-1"
+          >
+            {saveLoading ? 'Saving\u2026' : saved ? 'Saved!' : 'Save'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
