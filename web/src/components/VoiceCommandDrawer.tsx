@@ -144,15 +144,15 @@ export function VoiceCommandDrawer({ onVoiceSubmit }: VoiceCommandDrawerProps) {
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  { phrase: 'send 500 to 0712345678', type: 'mobile' },
-                  { phrase: 'pochi 200 to 0712345678', type: 'pochi' },
-                  { phrase: 'pay till 522533 500', type: 'till' },
+                  { phrase: 'send 10 to 0712345678', type: 'mobile' },
+                  { phrase: 'pochi 20 to 0712345678', type: 'pochi' },
+                  { phrase: 'pay till 522533 50', type: 'till' },
                   {
-                    phrase: 'pay bill 247247 account 1234 500',
+                    phrase: 'pay bill 247247 account 1234 20',
                     type: 'paybill',
                   },
                   {
-                    phrase: 'withdraw 1000 agent 123456 store 001',
+                    phrase: 'withdraw 100 agent 123456 store 001',
                     type: 'mobile',
                   },
                 ].map(({ phrase, type }) => (
